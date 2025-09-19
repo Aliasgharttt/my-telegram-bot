@@ -1,74 +1,61 @@
+import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import requests
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
-from persiantools.jdatetime import JalaliDateTime
-from config import TOKEN
+import pytz
+import jdatetime
+from datetime import datetime
 
+TOKEN = "توکن_ربات_اینجا"
 
-# --- توابع دریافت اطلاعات ---
+logging.basicConfig(level=logging.INFO)
 
-def get_currency():
-    try:
-        res = requests.get("https://api.exchangerate.host/latest?base=USD")
-        data = res.json()
-        usd = 1
-        eur = data["rates"]["EUR"]
-        return f"💵 دلار: {usd} USD\n💶 یورو: {eur:.2f} EUR"
-    except:
-        return "❌ خطا در دریافت قیمت ارز"
-
-
-def get_gold():
-    # اینجا می‌تونی بعداً API واقعی بزاری
-    return "🥇 قیمت طلا: ۲,۳۵۰,۰۰۰ تومان"
-
-
-def get_time_date():
-    now = JalaliDateTime.now()
-    return f"📅 تاریخ: {now.strftime('%Y/%m/%d')}\n⏰ ساعت: {now.strftime('%H:%M:%S')}"
-
-
-# --- منوی شروع ---
-
-def start(update: Update, context: CallbackContext):
+# دکمه شروع
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("💵 قیمت ارز", callback_data="currency")],
+        [InlineKeyboardButton("💵 قیمت دلار/یورو", callback_data="currency")],
         [InlineKeyboardButton("🥇 قیمت طلا", callback_data="gold")],
-        [InlineKeyboardButton("⏰ زمان و تاریخ", callback_data="time")],
-        [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")]
+        [InlineKeyboardButton("⏰ تاریخ و ساعت", callback_data="time")],
+        [InlineKeyboardButton("ℹ️ درباره", callback_data="about")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("👇 یکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
+    await update.message.reply_text("🌍 یکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
 
+# گرفتن اطلاعات
+def get_currency():
+    return "💵 دلار: 50,000 تومان\n💶 یورو: 55,000 تومان"
 
-# --- مدیریت دکمه‌ها ---
+def get_gold():
+    return "🥇 هر گرم طلا: 2,500,000 تومان"
 
-def button(update: Update, context: CallbackContext):
+def get_time_date():
+    tehran_tz = pytz.timezone("Asia/Tehran")
+    now = datetime.now(tehran_tz)
+    jdate = jdatetime.datetime.fromgregorian(datetime=now)
+    return f"⏰ {now.strftime('%H:%M:%S')}\n📅 {jdate.strftime('%Y/%m/%d')}"
+
+# دکمه‌ها
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
 
     if query.data == "currency":
-        query.edit_message_text(get_currency())
+        await query.edit_message_text(get_currency())
     elif query.data == "gold":
-        query.edit_message_text(get_gold())
+        await query.edit_message_text(get_gold())
     elif query.data == "time":
-        query.edit_message_text(get_time_date())
+        await query.edit_message_text(get_time_date())
     elif query.data == "about":
-        query.edit_message_text("🤖 این ربات قیمت لحظه‌ای دلار، یورو، طلا + تاریخ و ساعت ایران رو نشون میده.")
+        await query.edit_message_text("🤖 ربات نمایش لحظه‌ای قیمت دلار، یورو و طلا.")
 
-
-# --- اجرای ربات ---
-
+# اجرای ربات
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = Application.builder().token(TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CallbackQueryHandler(button))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
 
-    updater.start_polling()
-    updater.idle()
-
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
