@@ -1,99 +1,103 @@
-import os
-import telebot
-from telebot import types
-import random
-from datetime import datetime
+import logging
+import requests
 import jdatetime
+import pytz
+from datetime import datetime
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# =========================
-# دریافت توکن از متغیر محیطی
-# =========================
-TOKEN = os.getenv("BOT_TOKEN")
-if not TOKEN:
-    raise RuntimeError("❌ توکن پیدا نشد! مطمئن شو BOT_TOKEN رو تو Render ست کردی.")
+# --- خواندن توکن از فایل token.txt ---
+try:
+    with open("token.txt", "r") as f:
+        TOKEN = f.read().strip()
+        if not TOKEN:
+            raise ValueError("❌ فایل token.txt خالی است!")
+except FileNotFoundError:
+    raise FileNotFoundError("❌ فایل token.txt پیدا نشد. مطمئن شو که کنار bot.py باشه.")
 
-bot = telebot.TeleBot(TOKEN)
+# فعال کردن لاگ برای دیباگ
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# =========================
-# منو اصلی (دکمه‌ها)
-# =========================
-def main_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("🃏 جوک جدید", "🎲 تاس")
-    markup.add("🕒 ساعت و تاریخ", "ℹ️ درباره")
-    return markup
+# دستور start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("📅 تاریخ و ساعت", callback_data="time")],
+        [InlineKeyboardButton("💵 قیمت دلار", callback_data="usd")],
+        [InlineKeyboardButton("💶 قیمت یورو", callback_data="eur")],
+        [InlineKeyboardButton("🪙 قیمت طلا", callback_data="gold")],
+        [InlineKeyboardButton("😂 جوک", callback_data="joke")],
+        [InlineKeyboardButton("🎲 تاس", callback_data="dice")],
+        [InlineKeyboardButton("ℹ️ درباره", callback_data="about")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("سلام 👋 یک گزینه رو انتخاب کن:", reply_markup=reply_markup)
 
-# =========================
-# شروع
-# =========================
-@bot.message_handler(commands=['start'])
-def start(message):
-    bot.send_message(
-        message.chat.id,
-        "سلام! 👋\nبه ربات خوش اومدی.\nاز منو یکی رو انتخاب کن:",
-        reply_markup=main_menu()
-    )
+# هندلر دکمه‌ها
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-# =========================
-# جوک‌ها
-# =========================
-jokes = [
-    "می‌دونی فرق تو با اینترنت چیه؟ اینترنت محدود داره ولی تو بی‌نهایت عزیزی! 😅",
-    "معلم: چرا خوابیدی؟\nشاگرد: چون خواب بهترین درمان بی‌خوابی هست! 😂",
-    "می‌دونی فرق موبایل با دوست چیه؟ موبایل همیشه شارژ می‌خواد ولی دوست شارژت می‌کنه! 😉",
-    "یه روز یه کامپیوتر میره دکتر، دکتر میگه: مشکلت چیه؟ میگه: ویندوزم قفل کرده! 🤖",
-    "فرق آدم موفق با ناموفق؟ آدم موفق سحرخیزه، ناموفق دکمه اسنوزو میزنه! ⏰😂",
-]
+    if query.data == "time":
+        tehran_tz = pytz.timezone("Asia/Tehran")
+        now = datetime.now(tehran_tz)
+        jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d %H:%M:%S")
+        await query.edit_message_text(f"⏰ تاریخ و ساعت (ایران): {jalali}")
 
-@bot.message_handler(func=lambda m: m.text == "🃏 جوک جدید")
-def send_joke(message):
-    bot.send_message(message.chat.id, random.choice(jokes))
+    elif query.data == "usd":
+        try:
+            response = requests.get("https://api.exchangerate.host/latest?base=USD")
+            data = response.json()
+            irr = data["rates"]["IRR"]
+            await query.edit_message_text(f"💵 قیمت دلار:\n\n1 دلار = {irr:.0f} ریال")
+        except:
+            await query.edit_message_text("❌ خطا در دریافت قیمت دلار")
 
-# =========================
-# تاس
-# =========================
-@bot.message_handler(func=lambda m: m.text == "🎲 تاس")
-def dice(message):
-    bot.send_message(message.chat.id, f"🎲 عدد تاس: {random.randint(1,6)}")
+    elif query.data == "eur":
+        try:
+            response = requests.get("https://api.exchangerate.host/latest?base=EUR")
+            data = response.json()
+            irr = data["rates"]["IRR"]
+            await query.edit_message_text(f"💶 قیمت یورو:\n\n1 یورو = {irr:.0f} ریال")
+        except:
+            await query.edit_message_text("❌ خطا در دریافت قیمت یورو")
 
-# =========================
-# ساعت و تاریخ
-# =========================
-@bot.message_handler(func=lambda m: m.text == "🕒 ساعت و تاریخ")
-def datetime_now(message):
-    now = datetime.now()
-    jnow = jdatetime.datetime.now()
-    text = (
-        f"⏰ ساعت: {now.strftime('%H:%M:%S')}\n"
-        f"📅 تاریخ میلادی: {now.strftime('%Y-%m-%d')}\n"
-        f"📅 تاریخ شمسی: {jnow.strftime('%Y-%m-%d')}"
-    )
-    bot.send_message(message.chat.id, text)
+    elif query.data == "gold":
+        try:
+            response = requests.get("https://www.metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU")
+            data = response.json()
+            gold_price = data["rates"]["XAU"]
+            await query.edit_message_text(f"🪙 قیمت طلا (انس جهانی): {gold_price} دلار")
+        except:
+            await query.edit_message_text("❌ خطا در دریافت قیمت طلا")
 
-# =========================
-# درباره
-# =========================
-@bot.message_handler(func=lambda m: m.text == "ℹ️ درباره")
-def about(message):
-    bot.send_message(
-        message.chat.id,
-        "🤖 این ربات توسط *علی اصغر درویش پور* ساخته شده.\n\n"
-        "🔹 قابلیت‌ها:\n"
-        "🃏 جوک‌های بامزه\n"
-        "🎲 تاس ریختن\n"
-        "🕒 نمایش تاریخ و ساعت شمسی و میلادی\n"
-        "✨ منوی شیشه‌ای زیبا",
-        parse_mode="Markdown"
-    )
+    elif query.data == "joke":
+        jokes = [
+            "بهترین راه پولدار شدن تو ایران اینه که دلار نخری! 😂",
+            "بهتره به جای رژیم گرفتن، اینترنت ایران استفاده کنی! چون همه چی قطع میشه. 🤣",
+            "میگن خوشبختی با پول نمیاد، ولی خب با دلار ۵۰ تومنی خیلی راحت‌تر میاد! 😅"
+        ]
+        import random
+        await query.edit_message_text(f"😂 جوک:\n\n{random.choice(jokes)}")
 
-# =========================
-# fallback برای پیام‌های دیگه
-# =========================
-@bot.message_handler(func=lambda m: True)
-def fallback(message):
-    bot.send_message(message.chat.id, "از منو یکی رو انتخاب کن:", reply_markup=main_menu())
+    elif query.data == "dice":
+        import random
+        await query.edit_message_text(f"🎲 عدد تاس: {random.randint(1,6)}")
 
-# =========================
-# اجرای ربات
-# =========================
-bot.infinity_polling()
+    elif query.data == "about":
+        await query.edit_message_text("👨‍💻 برنامه‌نویس: علی اصغر درویش پور")
+
+# ران اصلی
+def main():
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(button))
+
+    print("✅ ربات روشن شد و در حال اجراست...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
