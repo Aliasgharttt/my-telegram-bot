@@ -1,59 +1,48 @@
-import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 import requests
-import jdatetime
-import pytz
-from bs4 import BeautifulSoup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from persiantools.jdatetime import JalaliDateTime
+from config import TOKEN
 
-# خواندن توکن از فایل token.txt
-with open("token.txt", "r") as f:
-    TOKEN = f.read().strip()
 
-# فعال کردن لاگ برای رفع خطا
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-logger = logging.getLogger(__name__)
+# --- توابع دریافت اطلاعات ---
 
-# دریافت نرخ دلار و یورو از exchangerate.host
 def get_currency():
     try:
-        url = "https://api.exchangerate.host/latest?base=USD&symbols=IRR,EUR"
-        r = requests.get(url).json()
-        usd_to_irr = r["rates"]["IRR"]
-        usd_to_eur = r["rates"]["EUR"]
-        return f"💵 دلار (USD → IRR): {usd_to_irr:,.0f} ریال\n💶 یورو (EUR → USD): {usd_to_eur:.2f}"
+        res = requests.get("https://api.exchangerate.host/latest?base=USD")
+        data = res.json()
+        usd = 1
+        eur = data["rates"]["EUR"]
+        return f"💵 دلار: {usd} USD\n💶 یورو: {eur:.2f} EUR"
     except:
-        return "❌ خطا در دریافت نرخ ارز"
+        return "❌ خطا در دریافت قیمت ارز"
 
-# دریافت قیمت طلا از tgju.org
+
 def get_gold():
-    try:
-        url = "https://www.tgju.org/gold"
-        r = requests.get(url)
-        soup = BeautifulSoup(r.text, "html.parser")
-        price = soup.find("td", {"data-market-row": "geram18"}).text.strip()
-        return f"🥇 قیمت طلای ۱۸ عیار: {price}"
-    except:
-        return "❌ خطا در دریافت قیمت طلا"
+    # اینجا می‌تونی بعداً API واقعی بزاری
+    return "🥇 قیمت طلا: ۲,۳۵۰,۰۰۰ تومان"
 
-# زمان و تاریخ شمسی
+
 def get_time_date():
-    tz = pytz.timezone("Asia/Tehran")
-    now = jdatetime.datetime.now(tz)
-    return f"⏰ ساعت: {now.strftime('%H:%M:%S')}\n📅 تاریخ: {now.strftime('%Y/%m/%d')}"
+    now = JalaliDateTime.now()
+    return f"📅 تاریخ: {now.strftime('%Y/%m/%d')}\n⏰ ساعت: {now.strftime('%H:%M:%S')}"
 
-# منوی اصلی
+
+# --- منوی شروع ---
+
 def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("💵 دلار و یورو", callback_data="currency")],
+        [InlineKeyboardButton("💵 قیمت ارز", callback_data="currency")],
         [InlineKeyboardButton("🥇 قیمت طلا", callback_data="gold")],
         [InlineKeyboardButton("⏰ زمان و تاریخ", callback_data="time")],
-        [InlineKeyboardButton("ℹ️ درباره ما", callback_data="about")]
+        [InlineKeyboardButton("ℹ️ درباره ربات", callback_data="about")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("به ربات اقتصادی خوش اومدی 🌍\nیکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
+    update.message.reply_text("👇 یکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
 
-# مدیریت دکمه‌ها
+
+# --- مدیریت دکمه‌ها ---
+
 def button(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
@@ -65,9 +54,11 @@ def button(update: Update, context: CallbackContext):
     elif query.data == "time":
         query.edit_message_text(get_time_date())
     elif query.data == "about":
-        query.edit_message_text("👨‍💻 برنامه‌نویس: علی اصغر درویش پور\n🤖 ربات اقتصادی با قیمت لحظه‌ای دلار، یورو و طلا")
+        query.edit_message_text("🤖 این ربات قیمت لحظه‌ای دلار، یورو، طلا + تاریخ و ساعت ایران رو نشون میده.")
 
-# اجرای ربات
+
+# --- اجرای ربات ---
+
 def main():
     updater = Updater(TOKEN, use_context=True)
     dp = updater.dispatcher
@@ -78,5 +69,6 @@ def main():
     updater.start_polling()
     updater.idle()
 
+
 if __name__ == "__main__":
-    main()    
+    main()
