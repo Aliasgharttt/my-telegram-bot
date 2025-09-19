@@ -1,61 +1,88 @@
-import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+import telebot
+from telebot import types
 import requests
+from datetime import datetime
 import pytz
 import jdatetime
-from datetime import datetime
 
-TOKEN = "توکن_ربات_اینجا"
+# خواندن توکن از فایل
+with open("token.txt", "r") as f:
+    TOKEN = f.read().strip()
 
-logging.basicConfig(level=logging.INFO)
+bot = telebot.TeleBot(TOKEN)
 
-# دکمه شروع
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("💵 قیمت دلار/یورو", callback_data="currency")],
-        [InlineKeyboardButton("🥇 قیمت طلا", callback_data="gold")],
-        [InlineKeyboardButton("⏰ تاریخ و ساعت", callback_data="time")],
-        [InlineKeyboardButton("ℹ️ درباره", callback_data="about")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🌍 یکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
+# لیست جوک‌ها
+jokes = [
+    "رفتی نونوایی میگی نون داغ داری؟ میگه نه نون خودمونه 😂",
+    "یکی از گوسفندا به چوپان گفت: چرا ما همیشه باید علف بخوریم؟ چوپان گفت: چون پیتزا گرونه 🤣",
+    "میگن خوابیدن کار تنبلاست… پس من قهرمانم! 😴",
+    "یه نفر از دکتر پرسید: دکتر چطور لاغر شم؟ دکتر گفت: کمتر بخور بیشتر بدو… اونم گفت: پس خدافظ، من نمیخوام! 😂",
+]
 
-# گرفتن اطلاعات
-def get_currency():
-    return "💵 دلار: 50,000 تومان\n💶 یورو: 55,000 تومان"
+# لیست جملات انگیزشی
+quotes = [
+    "هیچ وقت تسلیم نشو 💪",
+    "تو قوی‌تر از چیزی هستی که فکر می‌کنی ✨",
+    "هر روز یه شروع جدیده 🌱",
+    "اگه می‌خوای به چیزی برسی، باید براش بجنگی 🔥",
+]
 
-def get_gold():
-    return "🥇 هر گرم طلا: 2,500,000 تومان"
+# دریافت قیمت از API
+def get_price(symbol):
+    try:
+        url = f"https://api.exchangerate.host/latest?base=USD"
+        data = requests.get(url).json()
+        if symbol == "USD":
+            return "دلار آمریکا: ۱ دلار = {:.2f} تومان".format(data["rates"]["IRR"])
+        elif symbol == "EUR":
+            return "یورو: ۱ یورو = {:.2f} تومان".format(data["rates"]["IRR"] / data["rates"]["EUR"])
+        elif symbol == "GOLD":
+            # API رایگان طلا نداریم، به صورت تستی
+            return "💰 قیمت طلا: حدودی ۲,۳۰۰,۰۰۰ تومان در هر گرم"
+    except:
+        return "❌ خطا در دریافت قیمت"
 
-def get_time_date():
-    tehran_tz = pytz.timezone("Asia/Tehran")
-    now = datetime.now(tehran_tz)
-    jdate = jdatetime.datetime.fromgregorian(datetime=now)
-    return f"⏰ {now.strftime('%H:%M:%S')}\n📅 {jdate.strftime('%Y/%m/%d')}"
+# /start
+@bot.message_handler(commands=["start"])
+def start(message):
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("📅 تاریخ شمسی", callback_data="date"))
+    markup.add(types.InlineKeyboardButton("⏰ ساعت تهران", callback_data="time"))
+    markup.add(types.InlineKeyboardButton("💵 دلار", callback_data="usd"))
+    markup.add(types.InlineKeyboardButton("💶 یورو", callback_data="eur"))
+    markup.add(types.InlineKeyboardButton("🪙 طلا", callback_data="gold"))
+    markup.add(types.InlineKeyboardButton("🎲 تاس", callback_data="dice"))
+    markup.add(types.InlineKeyboardButton("😂 جوک", callback_data="joke"))
+    markup.add(types.InlineKeyboardButton("💡 انگیزشی", callback_data="quote"))
+    markup.add(types.InlineKeyboardButton("👨‍💻 درباره برنامه‌نویس", callback_data="about"))
+    bot.send_message(message.chat.id, "سلام 👋 به ربات خوش آمدی!\nاز منوی زیر یکی رو انتخاب کن:", reply_markup=markup)
 
-# دکمه‌ها
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+# مدیریت دکمه‌ها
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "date":
+        today = jdatetime.date.today()
+        bot.send_message(call.message.chat.id, f"📅 تاریخ شمسی: {today}")
+    elif call.data == "time":
+        tz = pytz.timezone("Asia/Tehran")
+        iran_time = datetime.now(tz).strftime("%H:%M:%S")
+        bot.send_message(call.message.chat.id, f"⏰ ساعت تهران: {iran_time}")
+    elif call.data == "usd":
+        bot.send_message(call.message.chat.id, get_price("USD"))
+    elif call.data == "eur":
+        bot.send_message(call.message.chat.id, get_price("EUR"))
+    elif call.data == "gold":
+        bot.send_message(call.message.chat.id, get_price("GOLD"))
+    elif call.data == "dice":
+        bot.send_dice(call.message.chat.id)
+    elif call.data == "joke":
+        import random
+        bot.send_message(call.message.chat.id, random.choice(jokes))
+    elif call.data == "quote":
+        import random
+        bot.send_message(call.message.chat.id, random.choice(quotes))
+    elif call.data == "about":
+        bot.send_message(call.message.chat.id, "👨‍💻 برنامه‌نویس: علی اصغر درویش پور")
 
-    if query.data == "currency":
-        await query.edit_message_text(get_currency())
-    elif query.data == "gold":
-        await query.edit_message_text(get_gold())
-    elif query.data == "time":
-        await query.edit_message_text(get_time_date())
-    elif query.data == "about":
-        await query.edit_message_text("🤖 ربات نمایش لحظه‌ای قیمت دلار، یورو و طلا.")
-
-# اجرای ربات
-def main():
-    app = Application.builder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
-
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+print("🤖 Bot is running...")
+bot.infinity_polling()
