@@ -1,4 +1,3 @@
-# bot.py
 import os
 import telebot
 from telebot import types
@@ -6,83 +5,95 @@ import random
 from datetime import datetime
 import jdatetime
 
-# ====== بارگذاری توکن ======
-# روش ایمن: توکن را در فایل token.txt قرار بده (یک خط، فقط توکن)
-TOKEN = None
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or TOKEN
-
+# =========================
+# دریافت توکن از متغیر محیطی
+# =========================
+TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
-    try:
-        with open("token.txt", "r", encoding="utf-8") as f:
-            TOKEN = f.read().strip()
-    except FileNotFoundError:
-        TOKEN = None
-
-if not TOKEN:
-    raise RuntimeError("توکن ربات پیدا نشد! فایل token.txt را بساز و توکن را داخل آن قرار بده (یا متغیر محیطی TELEGRAM_BOT_TOKEN را تنظیم کن).")
+    raise RuntimeError("❌ توکن پیدا نشد! مطمئن شو BOT_TOKEN رو تو Render ست کردی.")
 
 bot = telebot.TeleBot(TOKEN)
 
-jokes = [
-    "می‌دونی فرق تو با اینترنت چیه؟ اینترنت محدود داره ولی تو نه! 😂",
-    "معلم: چرا مشق ننوشتی؟ دانش‌آموز: چون سگم خورد! معلم: راست یا دروغ؟ دانش‌آموز: راست، سگم خیلی گرسنه بود! 🤣",
-    "یه نفر پرسید: چرا دیر اومدی؟ گفت: آلارم زنگ زد ولی خوابم برد! 😅",
-    "دانشجو: استاد شب امتحان برنامه‌نویسی رو از کی شروع کنم؟ استاد: از الان! 😆",
-    "پرسیدم «چرا همیشه پشت لپتاپ خندیدی؟» گفت: چون کدهاشو خوندم! 🤪",
-    "یه روز برق رفت، شمع گفت: الان وقته درخشیدن! 🕯️",
-    "طرف میره نانوایی میگه: ۵ دقیقه دیگه میام — الان ۵ ساله هنوز برنگشته! 😂",
-    "داداشم میگه می‌خوام رژیم بگیرم... همون لحظه داشت پیتزا سفارش می‌داد! 🍕"
-]
-
+# =========================
+# منو اصلی (دکمه‌ها)
+# =========================
 def main_menu():
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton("⏰ زمان", callback_data="time"),
-        types.InlineKeyboardButton("ℹ️ درباره", callback_data="about"),
-    )
-    markup.add(
-        types.InlineKeyboardButton("😂 جوک", callback_data="joke"),
-        types.InlineKeyboardButton("🎲 تاس", callback_data="dice"),
-    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add("🃏 جوک جدید", "🎲 تاس")
+    markup.add("🕒 ساعت و تاریخ", "ℹ️ درباره")
     return markup
 
+# =========================
+# شروع
+# =========================
 @bot.message_handler(commands=['start'])
-def cmd_start(msg):
-    bot.send_message(msg.chat.id, "سلام! 🎉\nربات من افتتاح شد.\nاز دکمه‌های زیر استفاده کن:", reply_markup=main_menu())
+def start(message):
+    bot.send_message(
+        message.chat.id,
+        "سلام! 👋\nبه ربات خوش اومدی.\nاز منو یکی رو انتخاب کن:",
+        reply_markup=main_menu()
+    )
 
-@bot.callback_query_handler(func=lambda call: True)
-def on_inline(call):
-    cid = call.message.chat.id
-    if call.data == "time":
-        iran_j = jdatetime.datetime.now()
-        iran_g = datetime.now()
-        text = f"📅 تاریخ شمسی: {iran_j.strftime('%Y/%m/%d')}\n⏰ ساعت: {iran_g.strftime('%H:%M:%S')}"
-        bot.answer_callback_query(call.id)
-        bot.send_message(cid, text)
+# =========================
+# جوک‌ها
+# =========================
+jokes = [
+    "می‌دونی فرق تو با اینترنت چیه؟ اینترنت محدود داره ولی تو بی‌نهایت عزیزی! 😅",
+    "معلم: چرا خوابیدی؟\nشاگرد: چون خواب بهترین درمان بی‌خوابی هست! 😂",
+    "می‌دونی فرق موبایل با دوست چیه؟ موبایل همیشه شارژ می‌خواد ولی دوست شارژت می‌کنه! 😉",
+    "یه روز یه کامپیوتر میره دکتر، دکتر میگه: مشکلت چیه؟ میگه: ویندوزم قفل کرده! 🤖",
+    "فرق آدم موفق با ناموفق؟ آدم موفق سحرخیزه، ناموفق دکمه اسنوزو میزنه! ⏰😂",
+]
 
-    elif call.data == "about":
-        bot.answer_callback_query(call.id)
-        bot.send_message(cid, "👨‍💻 برنامه‌نویس: علی اصغر درویش پور\n📌 ساخته شده با Python و TeleBot")
+@bot.message_handler(func=lambda m: m.text == "🃏 جوک جدید")
+def send_joke(message):
+    bot.send_message(message.chat.id, random.choice(jokes))
 
-    elif call.data == "joke":
-        bot.answer_callback_query(call.id)
-        bot.send_message(cid, random.choice(jokes))
+# =========================
+# تاس
+# =========================
+@bot.message_handler(func=lambda m: m.text == "🎲 تاس")
+def dice(message):
+    bot.send_message(message.chat.id, f"🎲 عدد تاس: {random.randint(1,6)}")
 
-    elif call.data == "dice":
-        bot.answer_callback_query(call.id)
-        num = random.randint(1,6)
-        bot.send_message(cid, f"🎲 عدد تاس: {num}")
+# =========================
+# ساعت و تاریخ
+# =========================
+@bot.message_handler(func=lambda m: m.text == "🕒 ساعت و تاریخ")
+def datetime_now(message):
+    now = datetime.now()
+    jnow = jdatetime.datetime.now()
+    text = (
+        f"⏰ ساعت: {now.strftime('%H:%M:%S')}\n"
+        f"📅 تاریخ میلادی: {now.strftime('%Y-%m-%d')}\n"
+        f"📅 تاریخ شمسی: {jnow.strftime('%Y-%m-%d')}"
+    )
+    bot.send_message(message.chat.id, text)
 
-@bot.message_handler(commands=['joke'])
-def cmd_joke(msg):
-    bot.reply_to(msg, random.choice(jokes))
+# =========================
+# درباره
+# =========================
+@bot.message_handler(func=lambda m: m.text == "ℹ️ درباره")
+def about(message):
+    bot.send_message(
+        message.chat.id,
+        "🤖 این ربات توسط *علی اصغر درویش پور* ساخته شده.\n\n"
+        "🔹 قابلیت‌ها:\n"
+        "🃏 جوک‌های بامزه\n"
+        "🎲 تاس ریختن\n"
+        "🕒 نمایش تاریخ و ساعت شمسی و میلادی\n"
+        "✨ منوی شیشه‌ای زیبا",
+        parse_mode="Markdown"
+    )
 
-@bot.message_handler(commands=['time'])
-def cmd_time(msg):
-    iran_j = jdatetime.datetime.now()
-    iran_g = datetime.now()
-    bot.reply_to(msg, f"📅 تاریخ شمسی: {iran_j.strftime('%Y/%m/%d')}\n⏰ ساعت: {iran_g.strftime('%H:%M:%S')}")
+# =========================
+# fallback برای پیام‌های دیگه
+# =========================
+@bot.message_handler(func=lambda m: True)
+def fallback(message):
+    bot.send_message(message.chat.id, "از منو یکی رو انتخاب کن:", reply_markup=main_menu())
 
-if __name__ == "__main__":
-    print("ربات روشن شد ✅")
-    bot.infinity_polling()
+# =========================
+# اجرای ربات
+# =========================
+bot.infinity_polling()
