@@ -1,103 +1,82 @@
 import logging
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, CallbackContext, CallbackQueryHandler
 import requests
 import jdatetime
 import pytz
-from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from bs4 import BeautifulSoup
 
-# --- خواندن توکن از فایل token.txt ---
-try:
-    with open("token.txt", "r") as f:
-        TOKEN = f.read().strip()
-        if not TOKEN:
-            raise ValueError("❌ فایل token.txt خالی است!")
-except FileNotFoundError:
-    raise FileNotFoundError("❌ فایل token.txt پیدا نشد. مطمئن شو که کنار bot.py باشه.")
+# خواندن توکن از فایل token.txt
+with open("token.txt", "r") as f:
+    TOKEN = f.read().strip()
 
-# فعال کردن لاگ برای دیباگ
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+# فعال کردن لاگ برای رفع خطا
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# دستور start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# دریافت نرخ دلار و یورو از exchangerate.host
+def get_currency():
+    try:
+        url = "https://api.exchangerate.host/latest?base=USD&symbols=IRR,EUR"
+        r = requests.get(url).json()
+        usd_to_irr = r["rates"]["IRR"]
+        usd_to_eur = r["rates"]["EUR"]
+        return f"💵 دلار (USD → IRR): {usd_to_irr:,.0f} ریال\n💶 یورو (EUR → USD): {usd_to_eur:.2f}"
+    except:
+        return "❌ خطا در دریافت نرخ ارز"
+
+# دریافت قیمت طلا از tgju.org
+def get_gold():
+    try:
+        url = "https://www.tgju.org/gold"
+        r = requests.get(url)
+        soup = BeautifulSoup(r.text, "html.parser")
+        price = soup.find("td", {"data-market-row": "geram18"}).text.strip()
+        return f"🥇 قیمت طلای ۱۸ عیار: {price}"
+    except:
+        return "❌ خطا در دریافت قیمت طلا"
+
+# زمان و تاریخ شمسی
+def get_time_date():
+    tz = pytz.timezone("Asia/Tehran")
+    now = jdatetime.datetime.now(tz)
+    return f"⏰ ساعت: {now.strftime('%H:%M:%S')}\n📅 تاریخ: {now.strftime('%Y/%m/%d')}"
+
+# منوی اصلی
+def start(update: Update, context: CallbackContext):
     keyboard = [
-        [InlineKeyboardButton("📅 تاریخ و ساعت", callback_data="time")],
-        [InlineKeyboardButton("💵 قیمت دلار", callback_data="usd")],
-        [InlineKeyboardButton("💶 قیمت یورو", callback_data="eur")],
-        [InlineKeyboardButton("🪙 قیمت طلا", callback_data="gold")],
-        [InlineKeyboardButton("😂 جوک", callback_data="joke")],
-        [InlineKeyboardButton("🎲 تاس", callback_data="dice")],
-        [InlineKeyboardButton("ℹ️ درباره", callback_data="about")],
+        [InlineKeyboardButton("💵 دلار و یورو", callback_data="currency")],
+        [InlineKeyboardButton("🥇 قیمت طلا", callback_data="gold")],
+        [InlineKeyboardButton("⏰ زمان و تاریخ", callback_data="time")],
+        [InlineKeyboardButton("ℹ️ درباره ما", callback_data="about")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("سلام 👋 یک گزینه رو انتخاب کن:", reply_markup=reply_markup)
+    update.message.reply_text("به ربات اقتصادی خوش اومدی 🌍\nیکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
 
-# هندلر دکمه‌ها
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# مدیریت دکمه‌ها
+def button(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    query.answer()
 
-    if query.data == "time":
-        tehran_tz = pytz.timezone("Asia/Tehran")
-        now = datetime.now(tehran_tz)
-        jalali = jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y/%m/%d %H:%M:%S")
-        await query.edit_message_text(f"⏰ تاریخ و ساعت (ایران): {jalali}")
-
-    elif query.data == "usd":
-        try:
-            response = requests.get("https://api.exchangerate.host/latest?base=USD")
-            data = response.json()
-            irr = data["rates"]["IRR"]
-            await query.edit_message_text(f"💵 قیمت دلار:\n\n1 دلار = {irr:.0f} ریال")
-        except:
-            await query.edit_message_text("❌ خطا در دریافت قیمت دلار")
-
-    elif query.data == "eur":
-        try:
-            response = requests.get("https://api.exchangerate.host/latest?base=EUR")
-            data = response.json()
-            irr = data["rates"]["IRR"]
-            await query.edit_message_text(f"💶 قیمت یورو:\n\n1 یورو = {irr:.0f} ریال")
-        except:
-            await query.edit_message_text("❌ خطا در دریافت قیمت یورو")
-
+    if query.data == "currency":
+        query.edit_message_text(get_currency())
     elif query.data == "gold":
-        try:
-            response = requests.get("https://www.metals-api.com/api/latest?access_key=demo&base=USD&symbols=XAU")
-            data = response.json()
-            gold_price = data["rates"]["XAU"]
-            await query.edit_message_text(f"🪙 قیمت طلا (انس جهانی): {gold_price} دلار")
-        except:
-            await query.edit_message_text("❌ خطا در دریافت قیمت طلا")
-
-    elif query.data == "joke":
-        jokes = [
-            "بهترین راه پولدار شدن تو ایران اینه که دلار نخری! 😂",
-            "بهتره به جای رژیم گرفتن، اینترنت ایران استفاده کنی! چون همه چی قطع میشه. 🤣",
-            "میگن خوشبختی با پول نمیاد، ولی خب با دلار ۵۰ تومنی خیلی راحت‌تر میاد! 😅"
-        ]
-        import random
-        await query.edit_message_text(f"😂 جوک:\n\n{random.choice(jokes)}")
-
-    elif query.data == "dice":
-        import random
-        await query.edit_message_text(f"🎲 عدد تاس: {random.randint(1,6)}")
-
+        query.edit_message_text(get_gold())
+    elif query.data == "time":
+        query.edit_message_text(get_time_date())
     elif query.data == "about":
-        await query.edit_message_text("👨‍💻 برنامه‌نویس: علی اصغر درویش پور")
+        query.edit_message_text("👨‍💻 برنامه‌نویس: علی اصغر درویش پور\n🤖 ربات اقتصادی با قیمت لحظه‌ای دلار، یورو و طلا")
 
-# ران اصلی
+# اجرای ربات
 def main():
-    app = Application.builder().token(TOKEN).build()
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CallbackQueryHandler(button))
 
-    print("✅ ربات روشن شد و در حال اجراست...")
-    app.run_polling()
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
-    main()
+    main()    
