@@ -1,92 +1,80 @@
+import os
 import logging
 import requests
-import random
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from random import randint
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-from persiantools.jdatetime import JalaliDateTime
-import pytz
-import os
 
-# لاگ برای دیباگ
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+TOKEN = os.environ.get('BOT_TOKEN')
 
-# توکن رو از محیط بگیر
-TOKEN = os.getenv("TOKEN")
+# دریافت قیمت‌ها از TGJU (معتبرترین منبع)
+def get_currency_price(currency):
+    try:
+        response = requests.get('https://api.tgju.org/v1/data/sana/json')
+        data = response.json()
+        
+        if currency == 'usd':
+            usd_price = data['sana']['data']['price']
+            return f"💰 قیمت دلار: {usd_price:,} تومان"
+        elif currency == 'eur':
+            eur_price = data['sana']['data']['eur']['price']
+            return f"💶 قیمت یورو: {eur_price:,} تومان"
+    except Exception as e:
+        return f"⚠️ خطا در دریافت قیمت: {str(e)}"
 
-# --- /start ---
+def get_gold_price():
+    try:
+        response = requests.get('https://api.tgju.org/v1/data/geram/json')
+        data = response.json()
+        gold_price = data['geram']['data']['price']
+        return f"🥇 قیمت هر گرم طلای ۱۸ عیار: {gold_price:,} تومان"
+    except Exception as e:
+        return f"⚠️ خطا در دریافت قیمت طلا: {str(e)}"
+
+# منوی اصلی
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("💵 قیمت دلار", callback_data="usd"),
-         InlineKeyboardButton("🥇 قیمت طلا", callback_data="gold")],
-        [InlineKeyboardButton("💶 قیمت یورو", callback_data="eur"),
-         InlineKeyboardButton("🎲 تاس", callback_data="dice")],
-        [InlineKeyboardButton("⏰ ساعت", callback_data="time"),
-         InlineKeyboardButton("📅 تاریخ شمسی", callback_data="date")]
+        [InlineKeyboardButton("💰 قیمت دلار", callback_data='usd')],
+        [InlineKeyboardButton("💶 قیمت یورو", callback_data='eur')],
+        [InlineKeyboardButton("🥇 قیمت طلا", callback_data='gold')],
+        [InlineKeyboardButton("🎲 تاس بازی", callback_data='dice')],
+        [InlineKeyboardButton("👨‍💻 معرفی برنامه نویس", callback_data='developer')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("سلام 👋 یکی از گزینه‌ها رو انتخاب کن:", reply_markup=reply_markup)
+    
+    await update.message.reply_text(
+        '🤖 به ربات قیمت‌گیر من خوش آمدید!\n\n'
+        '📊 قیمت‌های لحظه‌ای از معتبرترین منابع\n'
+        'لطفاً یکی از گزینه‌ها را انتخاب کنید:',
+        reply_markup=reply_markup
+    )
 
-# --- کال‌بک‌ها ---
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# هندلر دکمه‌ها
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    if query.data == 'usd':
+        message = get_currency_price('usd')
+    elif query.data == 'eur':
+        message = get_currency_price('eur')
+    elif query.data == 'gold':
+        message = get_gold_price()
+    elif query.data == 'dice':
+        dice_value = randint(1, 6)
+        message = f"🎲 تاس شما: {dice_value}"
+    elif query.data == 'developer':
+        message = "👨‍💻 برنامه نویس: علی اصغر درویش پور\n📧 Email: example@email.com"
+    else:
+        message = "دستور نامعتبر!"
+    
+    await query.edit_message_text(text=message)
 
-    if query.data == "usd":
-        price = get_price("usd")
-        await query.edit_message_text(f"💵 قیمت دلار: {price} تومان")
-
-    elif query.data == "gold":
-        price = get_price("gold")
-        await query.edit_message_text(f"🥇 قیمت طلا: {price} تومان")
-
-    elif query.data == "eur":
-        price = get_price("eur")
-        await query.edit_message_text(f"💶 قیمت یورو: {price} تومان")
-
-    elif query.data == "dice":
-        num = random.randint(1, 6)
-        await query.edit_message_text(f"🎲 عدد تاس: {num}")
-
-    elif query.data == "time":
-        tz = pytz.timezone("Asia/Tehran")
-        now = JalaliDateTime.now(tz)
-        await query.edit_message_text(f"⏰ ساعت: {now.strftime('%H:%M:%S')}")
-
-    elif query.data == "date":
-        tz = pytz.timezone("Asia/Tehran")
-        now = JalaliDateTime.now(tz)
-        await query.edit_message_text(f"📅 تاریخ: {now.strftime('%Y/%m/%d')}")
-
-# --- گرفتن قیمت ---
-def get_price(kind):
-    urls = {
-        "usd": "https://api.exchangerate.host/latest?base=USD&symbols=IRR",
-        "eur": "https://api.exchangerate.host/latest?base=EUR&symbols=IRR",
-        "gold": "https://api.exchangerate.host/latest?base=XAU&symbols=USD"
-    }
-    try:
-        r = requests.get(urls[kind], timeout=10)
-        data = r.json()
-        return list(data["rates"].values())[0]
-    except Exception:
-        return "خطا در دریافت قیمت"
-
-# --- /about ---
-async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 ساخته شده توسط دوست خوبت 🌹")
-
-# --- main ---
 def main():
-    app = Application.builder().token(TOKEN).build()
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    application.run_polling()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("about", about))
-    app.add_handler(CallbackQueryHandler(button))
-
-    app.run_polling()
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
