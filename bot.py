@@ -1,19 +1,17 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-from config import TOKEN   # خواندن توکن از فایل config.py
+from config import Token   # توکن از config.py ایمپورت میشه
 
 # دستور start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام! 🌹 ربات با موفقیت فعاله.")
+    await update.message.reply_text("سلام 👋 ربات روشنه!")
 
+# تابع اصلی
 def main():
-    # ساخت اپلیکیشن
-    app = Application.builder().token(TOKEN).build()
-
-    # ثبت دستور
+    app = Application.builder().token(Token).build()
     app.add_handler(CommandHandler("start", start))
 
-    # اجرای بات
+    print("ربات شروع به کار کرد ✅")
     app.run_polling()
 
 if __name__ == "__main__":
