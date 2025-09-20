@@ -1,74 +1,68 @@
 import os
-import requests
+import random
+import pytz
+import jdatetime
+from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# دریافت توکن از Environment
+# گرفتن توکن از Environment
 TOKEN = os.getenv("TOKEN")
 
-# آدرس‌های API برای نرخ‌ها
-DOLLAR_API = "https://api.exchangerate.host/latest?base=USD&symbols=IRR"
-GOLD_API = "https://api.metals.live/v1/spot"
+# ساعت تهران
+def get_tehran_time():
+    tz = pytz.timezone("Asia/Tehran")
+    now = datetime.now(tz)
+    return now.strftime("%H:%M:%S")
 
-# تابع گرفتن قیمت دلار به تومان
-def get_dollar_to_toman():
-    try:
-        r = requests.get(DOLLAR_API).json()
-        rate = r["rates"]["IRR"] / 10  # چون ریال هست تقسیم بر 10 می‌کنیم
-        return f"💵 قیمت دلار: {rate:,.0f} تومان"
-    except:
-        return "❌ خطا در دریافت قیمت دلار"
+# تاریخ شمسی
+def get_shamsi_date():
+    return jdatetime.date.today().strftime("%Y/%m/%d")
 
-# تابع گرفتن قیمت طلا
-def get_gold_to_toman():
-    try:
-        r = requests.get(GOLD_API).json()
-        gold_price_usd = r[0][1]  # قیمت انس طلا به دلار
-        # تقریبی: هر انس ≈ 31.1 گرم → قیمت هر گرم طلا
-        gram_gold_usd = gold_price_usd / 31.1
-        # دلار به تومان
-        r_dollar = requests.get(DOLLAR_API).json()
-        dollar_rate = r_dollar["rates"]["IRR"] / 10
-        gram_gold_toman = gram_gold_usd * dollar_rate
-        return f"🏅 قیمت طلا (هر گرم): {gram_gold_toman:,.0f} تومان"
-    except:
-        return "❌ خطا در دریافت قیمت طلا"
+# جوک‌ها
+jokes = [
+    "یه روز یه مرد به ربات گفت: برو ظرفارو بشور... ربات گفت: من باتم نه مایع ظرفشویی! 🤖",
+    "می‌دونی فرق آدم خجالتی با لپ‌تاپ چیه؟ لپ‌تاپ همیشه راحت روشن میشه 😅",
+    "میگن پول خوشبختی نمیاره، درسته... ولی تاکسی اینترنتی رو مجانی میاره؟ 😂",
+]
 
 # منوی اصلی
 def main_menu():
     keyboard = [
-        [InlineKeyboardButton("💵 قیمت دلار", callback_data="dollar")],
-        [InlineKeyboardButton("🏅 قیمت طلا", callback_data="gold")],
+        [InlineKeyboardButton("🕒 ساعت تهران", callback_data="time")],
+        [InlineKeyboardButton("📅 تاریخ شمسی", callback_data="date")],
+        [InlineKeyboardButton("🎲 تاس", callback_data="dice")],
+        [InlineKeyboardButton("😂 جوک", callback_data="joke")],
         [InlineKeyboardButton("👨‍💻 معرفی برنامه‌نویس", callback_data="dev")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# دستور start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام 👋\nیکی از گزینه‌های زیر رو انتخاب کن:", reply_markup=main_menu())
+# دکمه برگشت
+def back_button():
+    keyboard = [[InlineKeyboardButton("🔙 بازگشت", callback_data="back")]]
+    return InlineKeyboardMarkup(keyboard)
 
-# هندلر دکمه‌ها
+# شروع
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("به ربات خوش اومدی 👋", reply_markup=main_menu())
+
+# هندل دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "dollar":
-        text = get_dollar_to_toman()
-    elif query.data == "gold":
-        text = get_gold_to_toman()
+    if query.data == "time":
+        await query.edit_message_text(f"⏰ ساعت تهران: {get_tehran_time()}", reply_markup=back_button())
+    elif query.data == "date":
+        await query.edit_message_text(f"📅 تاریخ شمسی: {get_shamsi_date()}", reply_markup=back_button())
+    elif query.data == "dice":
+        await query.edit_message_text(f"🎲 عدد تاس: {random.randint(1,6)}", reply_markup=back_button())
+    elif query.data == "joke":
+        await query.edit_message_text(f"😂 {random.choice(jokes)}", reply_markup=back_button())
     elif query.data == "dev":
-        text = "👨‍💻 برنامه‌نویس: [نام شما]\n📌 تماس: @YourUsername"
-    else:
-        text = "❌ گزینه نامعتبر"
-
-    # اضافه کردن دکمه بازگشت
-    keyboard = [
-        [InlineKeyboardButton("🔙 بازگشت به منو", callback_data="back")]
-    ]
-    if query.data == "back":
-        await query.edit_message_text("منوی اصلی:", reply_markup=main_menu())
-    else:
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await query.edit_message_text("👨‍💻 برنامه‌نویس: علی اصغر درویش پور", reply_markup=back_button())
+    elif query.data == "back":
+        await query.edit_message_text("منوی اصلی 👇", reply_markup=main_menu())
 
 # اجرای ربات
 def main():
@@ -77,17 +71,13 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    APP_URL = os.getenv("APP_URL")
-
-    if APP_URL:
-        app.run_webhook(
-            listen="0.0.0.0",
-            port=int(os.environ.get("PORT", 8443)),
-            url_path=TOKEN,
-            webhook_url=f"{APP_URL}/{TOKEN}"
-        )
-    else:
-        app.run_polling()
+    port = int(os.environ.get("PORT", 8443))
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TOKEN,
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME')}/{TOKEN}"
+    )
 
 if __name__ == "__main__":
     main()
