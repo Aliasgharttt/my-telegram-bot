@@ -1,5 +1,6 @@
-python-telegram-bot==20.3
-requests==2.32.3
-beautifulsoup4==4.12.2
-jdatetime==4.1.1
-pytz==2025.2
+python-telegram-bot==13.15
+requests
+pytz
+jdatetime
+flask
+gunicorn
