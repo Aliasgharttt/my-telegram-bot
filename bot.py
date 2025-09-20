@@ -1,33 +1,58 @@
+import logging
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import filetype
 import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
 
-# گرفتن توکن از Environment Variables
-TOKEN = os.getenv("BOT_TOKEN")
+# ---------------- تنظیمات لاگ ----------------
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
-# دستور start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام! 🎉 ربات با موفقیت ران شد 🚀")
+# ---------------- توکن ربات ----------------
+TOKEN = os.getenv("BOT_TOKEN")  # یا مستقیم توکن بذار: "123456:ABC-DEF..."
 
-# دستور help
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("لیست دستورات:\n/start - شروع\n/help - راهنما")
+# ---------------- دستورات ربات ----------------
+def start(update, context):
+    update.message.reply_text("سلام! من آنلاین هستم 🤖")
 
-# تابع اصلی
+def help_command(update, context):
+    update.message.reply_text("لیست دستورات:\n/start - شروع\n/help - کمک")
+
+def handle_message(update, context):
+    text = update.message.text
+    update.message.reply_text(f"شما گفتید: {text}")
+
+def handle_photo(update, context):
+    photo_file = update.message.photo[-1].get_file()
+    file_path = "photo.jpg"
+    photo_file.download(file_path)
+
+    kind = filetype.guess(file_path)
+    if kind is not None:
+        update.message.reply_text(f"📸 فرمت عکس: {kind.mime}")
+    else:
+        update.message.reply_text("فرمت ناشناخته است.")
+
+# ---------------- اجرای اصلی ----------------
 def main():
-    if not TOKEN:
-        raise ValueError("❌ BOT_TOKEN در Environment Variables ست نشده است.")
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    # ساخت اپلیکیشن
-    app = Application.builder().token(TOKEN).build()
+    # دستورات
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("help", help_command))
 
-    # ثبت هندلرها
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
+    # پیام متنی
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
-    # اجرای ربات
-    print("🤖 Bot is running...")
-    app.run_polling()
+    # عکس
+    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
+
+    # شروع
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == "__main__":
     main()
